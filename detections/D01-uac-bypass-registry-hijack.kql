@@ -1,0 +1,40 @@
+// =====================================================================
+// D01 - UAC Bypass via Registry Hijack of Auto-Elevating Binaries
+// =====================================================================
+// MITRE ATT&CK : T1548.002 - Abuse Elevation Control Mechanism: Bypass UAC
+// Tactic       : Privilege Escalation, Defense Evasion
+// Severity     : High
+// Data source  : Sysmon Event ID 13 (Registry value set)
+// Author       : Umang Udeshi
+//
+// Description:
+//   Attackers write a command into a shell\open\command key in the user's
+//   own registry hive (HKCU\Software\Classes). When an auto-elevating
+//   Windows binary (sdclt, fodhelper, computerdefaults, eventvwr) runs,
+//   it reads that key and launches the attacker's command with admin
+//   rights - without a UAC prompt.
+//
+// Tested against: OTRF APT29 Day 1 (196,081 events)
+//   True positives : 2 (22:58:18 and 22:58:30 UTC on SCRANTON)
+//   False positives: 0
+//
+// Known false positives:
+//   Rare. Some software installers legitimately register file handlers.
+//   Tune by excluding known installer processes in Image if needed.
+//
+// Essential Eight mitigation:
+//   Restrict administrative privileges - standard users cannot gain
+//   admin rights through this bypass. Setting UAC to "Always notify"
+//   also blocks this technique family.
+// =====================================================================
+let hijackKeys = dynamic([
+    "\\Folder\\shell\\open\\command",       // sdclt.exe
+    "\\exefile\\shell\\open\\command",      // sdclt.exe (older variant)
+    "\\ms-settings\\shell\\open\\command",  // fodhelper.exe, computerdefaults.exe
+    "\\mscfile\\shell\\open\\command"       // eventvwr.exe
+]);
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 13
+| where TargetObject has "_Classes" and TargetObject has_any (hijackKeys)
+| project EventTime, Hostname, Image, TargetObject, Details
+| order by EventTime asc
