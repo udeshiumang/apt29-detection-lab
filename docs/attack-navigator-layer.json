@@ -1,0 +1,24 @@
+{
+  "name": "APT29 Detection Lab - Coverage",
+  "versions": { "layer": "4.5", "navigator": "5.1.0" },
+  "domain": "enterprise-attack",
+  "description": "Techniques observed in the OTRF APT29 Day 1 dataset. Green = detected by D01-D06. Yellow = observed, no dedicated detection yet.",
+  "gradient": { "colors": ["#ffe766", "#8ec843"], "minValue": 1, "maxValue": 2 },
+  "legendItems": [
+    { "label": "Detected (D01-D06)", "color": "#8ec843" },
+    { "label": "Observed - detection gap", "color": "#ffe766" }
+  ],
+  "techniques": [
+    { "techniqueID": "T1204.002", "score": 2, "comment": "D04 - user ran disguised .scr", "showSubtechniques": true },
+    { "techniqueID": "T1036.002", "score": 2, "comment": "D04 - RTLO masquerading", "showSubtechniques": true },
+    { "techniqueID": "T1548.002", "score": 2, "comment": "D01 - sdclt UAC bypass", "showSubtechniques": true },
+    { "techniqueID": "T1059.001", "score": 2, "comment": "D05 - hidden PowerShell risk scoring", "showSubtechniques": true },
+    { "techniqueID": "T1027.003", "score": 2, "comment": "D05 - steganography payload in monkey.png", "showSubtechniques": true },
+    { "techniqueID": "T1140", "score": 2, "comment": "D05 - payload decoded from image pixels" },
+    { "techniqueID": "T1003.001", "score": 2, "comment": "D02 - LSASS dumping on SCRANTON and NASHUA", "showSubtechniques": true },
+    { "techniqueID": "T1021.006", "score": 2, "comment": "D03 - WinRM from SCRANTON to NASHUA", "showSubtechniques": true },
+    { "techniqueID": "T1560.001", "score": 2, "comment": "D06 - encrypted RAR archive", "showSubtechniques": true },
+    { "techniqueID": "T1074.001", "score": 2, "comment": "D06 - data staged in AppData and Desktop", "showSubtechniques": true },
+    { "techniqueID": "T1059.003", "score": 1, "comment": "Observed - hidden cmd.exe reverse shell. Gap: no dedicated detection", "showSubtechniques": true }
+  ]
+}
