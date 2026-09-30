@@ -1,0 +1,124 @@
+// =====================================================================
+// APT29 Detection Lab - Full Investigation Queries (in order)
+// Author: Umang Udeshi | Dataset: OTRF Security-Datasets, APT29 Day 1
+// Platform: Azure Data Explorer (KQL) - Sentinel/Defender compatible
+// =====================================================================
+
+// ---------- SETUP & VALIDATION ----------
+
+// Step 3 - Cluster health check
+print message = "SOC lab online", checked_at = now()
+
+// Step 8 - Table setup (run once)
+// .create table Apt29Raw (Event: dynamic)
+// .create table Apt29Raw ingestion json mapping 'RawEventMapping' '[{"column":"Event","Properties":{"Path":"$"}}]'
+// Note: the upload wizard overrode this mapping and inferred 147 columns (found during validation)
+
+// Step 10 - Total events (expected 196,081)
+Apt29Raw
+| count
+
+// Step 11 - Column count (free tier limit 200)
+Apt29Raw
+| getschema
+| count
+
+// Step 11 - Log source breakdown ("Security" vs "security" case inconsistency found)
+Apt29Raw
+| summarize Events = count() by Channel
+| order by Events desc
+
+// ---------- HUNTING: INITIAL ACCESS ----------
+
+// Step 12 - Stack counting: rarest processes first (found .scr and Rar.exe)
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| summarize Runs = count() by Image
+| order by Runs asc
+| take 30
+
+// Step 13 - Pivot on the RTLO-disguised .scr: patient zero
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| where Image has "3aka3"
+| project EventTime, Hostname, User, Image, CommandLine, ParentImage, Hashes, ProcessGuid
+
+// ---------- HUNTING: EXECUTION & PRIVILEGE ESCALATION ----------
+
+// Step 14 - Process tree: malware spawned hidden cmd.exe
+let malwareGuid = toscalar(
+    Apt29Raw
+    | where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+    | where Image has "3aka3"
+    | project ProcessGuid);
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| where ParentProcessGuid == malwareGuid
+| project EventTime, Image, CommandLine, ProcessGuid
+| order by EventTime asc
+
+// Step 15 - Process tree: PowerShell and sdclt.exe launched from the shells
+let malwareGuid = toscalar(
+    Apt29Raw
+    | where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+    | where Image has "3aka3"
+    | project ProcessGuid);
+let shellGuids =
+    Apt29Raw
+    | where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+    | where ParentProcessGuid == malwareGuid and Image endswith "cmd.exe"
+    | project ProcessGuid;
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| where ParentProcessGuid in (shellGuids)
+| project EventTime, Image, CommandLine, ProcessGuid
+| order by EventTime asc
+
+// Step 16 - Confirm UAC bypass: registry hijack + steganography payload
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 13
+| where TargetObject has "shell\\open\\command"
+| project EventTime, Image, TargetObject, Details
+| order by EventTime asc
+
+// ---------- HUNTING: CREDENTIAL ACCESS & LATERAL MOVEMENT ----------
+
+// Step 20 - Who accessed lsass.exe? (stack by source and access rights)
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 10
+| where TargetImage endswith "lsass.exe"
+| summarize Count = count(), FirstSeen = min(EventTime), LastSeen = max(EventTime) by SourceImage, GrantedAccess
+| order by Count asc
+
+// Step 21 - Credential dumping by host (SCRANTON, then NASHUA via wsmprovhost)
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 10
+| where TargetImage endswith "lsass.exe"
+| where SourceImage has_any ("powershell.exe", "wsmprovhost.exe")
+| where GrantedAccess in ("0x1fffff", "0x1f3fff")
+| project EventTime, Hostname, SourceImage, GrantedAccess
+| order by EventTime asc
+
+// Step 24 - Processes spawned by WinRM (returned 0 - attacker stayed in memory)
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| where ParentImage endswith "wsmprovhost.exe"
+| project EventTime, Hostname, User, Image, CommandLine
+
+// Step 24b - Pivot to network telemetry: WinRM connections SCRANTON -> NASHUA
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 3
+| where toint(DestinationPort) in (5985, 5986)
+| project EventTime, Hostname, User, Image, SourceIp, DestinationIp, DestinationPort
+| order by EventTime asc
+
+// ---------- HUNTING: COLLECTION ----------
+
+// Step 30 - Data staging: encrypted RAR archive on NASHUA (password captured)
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| where Image endswith "rar.exe"
+| project EventTime, Hostname, User, CommandLine, ParentImage
+
+// ---------- DETECTIONS ----------
+// D01-D06 are stored individually in /detections with full metadata.
