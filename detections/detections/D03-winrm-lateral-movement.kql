@@ -1,0 +1,34 @@
+// =====================================================================
+// D03 - Lateral Movement via PowerShell Remoting (WinRM)
+// =====================================================================
+// MITRE ATT&CK : T1021.006 - Remote Services: Windows Remote Management
+// Tactic       : Lateral Movement
+// Severity     : Medium (High if combined with D02 on the same host)
+// Data source  : Sysmon Event ID 3 (Network connection)
+// Author       : Umang Udeshi
+//
+// Description:
+//   Flags PowerShell making outbound connections to another host on
+//   WinRM ports 5985/5986. Attacker commands ran in memory on the
+//   target, so process creation logs showed nothing - network
+//   telemetry was the reliable signal.
+//
+// Tested against: OTRF APT29 Day 1 (196,081 events)
+//   True positives : SCRANTON (10.0.1.4) -> NASHUA (10.0.1.6), 23:09 UTC
+//   False positives: 0 (localhost WinRM traffic excluded)
+//
+// Known false positives:
+//   IT admins using PowerShell Remoting. Tune by allowlisting admin
+//   workstations or jump servers.
+//
+// Mitigation:
+//   Restrict WinRM to admin jump hosts via host firewall; restrict
+//   administrative privileges (Essential Eight).
+// =====================================================================
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 3
+| where toint(DestinationPort) in (5985, 5986)
+| where Image has_any ("powershell.exe", "pwsh.exe")
+| where DestinationIp !in ("127.0.0.1", "::1", "0:0:0:0:0:0:0:1")
+| project EventTime, Hostname, User, Image, SourceIp, DestinationIp, DestinationPort
+| order by EventTime asc
