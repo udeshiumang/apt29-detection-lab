@@ -1,0 +1,46 @@
+// =====================================================================
+// D05 - Suspicious Hidden PowerShell (Risk Scoring)
+// =====================================================================
+// MITRE ATT&CK : T1059.001 - Command and Scripting Interpreter: PowerShell
+//                T1027.003 - Obfuscated Files or Information: Steganography
+//                T1140     - Deobfuscate/Decode Files or Information
+// Tactic       : Execution, Defense Evasion
+// Severity     : High
+// Data source  : Sysmon Event ID 1 (Process creation)
+// Author       : Umang Udeshi
+//
+// Description:
+//   Scores PowerShell command lines by counting suspicious options
+//   (hidden window, execution policy bypass, non-interactive,
+//   Invoke-Expression, encoded commands, Base64 decoding, image pixel
+//   reading, web downloads). Alerts at 3 or more. One option alone can
+//   be normal admin use; combinations rarely are.
+//
+// Tested against: OTRF APT29 Day 1 (196,081 events)
+//   True positives : 1 (SCRANTON, 22:58:44 UTC, score 5/8 - steganography
+//                    payload launched 2 seconds after the sdclt UAC bypass)
+//   False positives: 0
+//
+// Known false positives:
+//   Some management/deployment tools launch hidden PowerShell with
+//   bypass. Review the parent process and allowlist verified tools.
+//
+// Mitigation:
+//   Enable PowerShell script block logging and Constrained Language
+//   Mode; application control (Essential Eight) to restrict scripts.
+// =====================================================================
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| where Image endswith "powershell.exe"
+| extend CL = tolower(CommandLine)
+| extend Score = toint(CL contains "hidden")
+               + toint(CL contains "bypass")
+               + toint(CL contains "-noni")
+               + toint(CL contains "iex" or CL contains "invoke-expression")
+               + toint(CL contains "-enc")
+               + toint(CL contains "frombase64string")
+               + toint(CL contains "getpixel")
+               + toint(CL contains "downloadstring")
+| where Score >= 3
+| project EventTime, Hostname, User, Score, CommandLine
+| order by EventTime asc
