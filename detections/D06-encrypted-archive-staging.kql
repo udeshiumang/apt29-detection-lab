@@ -1,0 +1,38 @@
+// =====================================================================
+// D06 - Data Staging via Encrypted Archive
+// =====================================================================
+// MITRE ATT&CK : T1560.001 - Archive Collected Data: Archive via Utility
+//                T1074.001 - Data Staged: Local Data Staging
+// Tactic       : Collection
+// Severity     : High
+// Data source  : Sysmon Event ID 1 (Process creation)
+// Author       : Umang Udeshi
+//
+// Description:
+//   Flags archiving tools (RAR, WinRAR, 7-Zip) that either create a
+//   password-protected archive, or run from user-writable folders
+//   (Temp, AppData, ProgramData). Attackers encrypt stolen data before
+//   sending it out so contents and file names are hidden.
+//
+// Tested against: OTRF APT29 Day 1 (196,081 events)
+//   True positives : 1 (NASHUA, 23:16:19 UTC, Rar.exe from Windows\Temp,
+//                    -hp encrypted archive; password captured: fGzq5yKw)
+//   False positives: 0
+//
+// Known false positives:
+//   Users or backup scripts creating password-protected archives.
+//   Check the parent process and destination path.
+//
+// Mitigation:
+//   Application control (Essential Eight) to block unapproved tools
+//   and execution from Temp; DLP monitoring on outbound archives.
+// =====================================================================
+let archivers = dynamic(["rar.exe", "winrar.exe", "7z.exe", "7za.exe", "7zr.exe"]);
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| extend Exe = tolower(tostring(split(Image, "\\")[-1]))
+| where Exe in (archivers)
+| where CommandLine contains " -hp" or CommandLine contains " -p"
+     or Image has_any ("\\Temp\\", "\\AppData\\", "\\ProgramData\\")
+| project EventTime, Hostname, User, Image, CommandLine
+| order by EventTime asc
