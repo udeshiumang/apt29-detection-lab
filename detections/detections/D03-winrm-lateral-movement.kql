@@ -1,5 +1,5 @@
 // =====================================================================
-// D03 - Lateral Movement via PowerShell Remoting (WinRM)
+//D03 - Lateral Movement via PowerShell Remoting (WinRM)
 // =====================================================================
 // MITRE ATT&CK : T1021.006 - Remote Services: Windows Remote Management
 // Tactic       : Lateral Movement
