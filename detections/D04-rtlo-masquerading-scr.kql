@@ -1,0 +1,35 @@
+// =====================================================================
+// D04 - Masquerading via Right-to-Left Override / Screensaver Execution
+// =====================================================================
+// MITRE ATT&CK : T1036.002 - Masquerading: Right-to-Left Override
+//                T1204.002 - User Execution: Malicious File
+// Tactic       : Initial Access, Defense Evasion
+// Severity     : High
+// Data source  : Sysmon Event ID 1 (Process creation)
+// Author       : Umang Udeshi
+//
+// Description:
+//   Flags programs whose name contains the hidden right-to-left override
+//   character (U+202E), which makes a filename display backwards so a
+//   .scr program looks like a .doc. Also flags any .scr file running
+//   outside C:\Windows, since legitimate screensavers only live there.
+//
+// Tested against: OTRF APT29 Day 1 (196,081 events)
+//   True positives : 1 (SCRANTON, 22:55:56 UTC, user pbeesly)
+//   False positives: 0
+//
+// Known false positives:
+//   Very rare. Some legacy or custom screensavers installed outside
+//   C:\Windows - verify by hash before closing.
+//
+// Essential Eight mitigation:
+//   Application control - block execution from user-writable folders
+//   (ProgramData, Downloads, AppData). This stops the .scr from running.
+// =====================================================================
+let rtlo = unicode_codepoints_to_string(8238);   // hidden U+202E character
+Apt29Raw
+| where Channel == "Microsoft-Windows-Sysmon/Operational" and EventID == 1
+| where Image has rtlo or Image has "â€®"
+     or (Image endswith ".scr" and Image !startswith "C:\\Windows\\")
+| project EventTime, Hostname, User, Image, ParentImage, Hashes
+| order by EventTime asc
