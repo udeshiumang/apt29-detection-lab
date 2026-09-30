@@ -18,7 +18,7 @@ On 1 May 2020, user **pbeesly** opened a malicious file disguised as a Word docu
 
 The attacker then **stole stored passwords** from SCRANTON, used them to **move to a second machine, NASHUA**, stole passwords there as well, and packed collected data into a **password-protected archive** ready to be taken out of the network.
 
-The full chain - from first click to data staged for theft - took **about 20 minutes**.
+The full chain - from first click to data staged for theft - took **about 21 minutes**.
 
 **Business impact:** credentials for all users logged into SCRANTON and NASHUA should be treated as compromised. Data collected from pbeesly's profile was prepared for exfiltration.
 
